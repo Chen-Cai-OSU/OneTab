@@ -91,11 +91,20 @@ class OneTabManager:
         # Treeview
         self.tree = ttk.Treeview(
             tree_frame,
-            columns=("Title", "URL", "Domain"),
+            columns=("title", "uRL", "domain"),
             show="tree headings",
             yscrollcommand=v_scrollbar.set,
             xscrollcommand=h_scrollbar.set,
             selectmode="extended",
+        )
+
+        # define each heading…
+        self.tree.heading(
+            "title", text="Title", command=lambda: self.sort_by("title", False)
+        )
+        # self.tree.heading("url", text="Url", command=lambda: self.sort_by("url", False))
+        self.tree.heading(
+            "domain", text="Domain", command=lambda: self.sort_by("domain", False)
         )
 
         # Configure scrollbars
@@ -109,15 +118,15 @@ class OneTabManager:
 
         # Configure columns
         self.tree.column("#0", width=50, stretch=False)
-        self.tree.column("Title", width=400)
-        self.tree.column("URL", width=500)
-        self.tree.column("Domain", width=200)
+        self.tree.column("title", width=400)
+        self.tree.column("uRL", width=500)
+        self.tree.column("domain", width=200)
 
         # Configure headings
         self.tree.heading("#0", text="#")
-        self.tree.heading("Title", text="Title")
-        self.tree.heading("URL", text="URL")
-        self.tree.heading("Domain", text="Domain")
+        self.tree.heading("title", text="Title")
+        self.tree.heading("uRL", text="URL")
+        self.tree.heading("domain", text="Domain")
 
         # Style configuration for better visibility
         style = ttk.Style()
@@ -151,6 +160,30 @@ class OneTabManager:
             foreground="gray",
         )
         shortcuts_label.pack(side=tk.RIGHT, padx=10)
+
+    def sort_by(self, col, reverse=False):
+        """
+        Sort self.tabs_data by given column (e.g. 'domain', 'title', 'url'),
+        then repopulate the Treeview in that order.
+        """
+        # sort the in-memory list
+        self.tabs_data.sort(key=lambda e: e.get(col) or "", reverse=reverse)
+
+        # clear existing rows
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+
+        # re-insert rows in new order
+        for entry in self.tabs_data:
+            self.tree.insert(
+                "", 
+                "end", 
+                values=(entry.get("title"), entry.get("url"), entry.get("domain"))
+            )
+
+        # next time we click, flip the sort order
+        # store the new reverse flag on the heading
+        self.tree.heading(col, command=lambda: self.sort_by(col, not reverse))
 
     def parse_onetab_line(self, line):
         """Parse a OneTab export line to extract title and URL"""
