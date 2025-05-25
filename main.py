@@ -191,6 +191,29 @@ class OneTabManager:
         # 4) fallback: treat as a section header or unlabeled entry
         return {"title": line, "url": None}
 
+    def dedupe_entries(self, entries):
+        """
+        Remove any entries with duplicate URLs, keeping only the most
+        recent occurrence, and print how many were dropped.
+        """
+        seen_urls = set()
+        deduped_rev = []
+        duplicates = 0
+
+        # iterate backwards so that the *last* (i.e. most recent) wins
+        for entry in reversed(entries):
+            url = entry.get('url')
+            if url and url in seen_urls:
+                duplicates += 1
+                continue
+            if url:
+                seen_urls.add(url)
+            deduped_rev.append(entry)
+
+        deduped = list(reversed(deduped_rev))
+        print(f"Removed {duplicates} duplicate entr{'y' if duplicates==1 else 'ies'}.")
+        return deduped
+
     def _parse_onetab_line(self, line):
         """Parse a OneTab export line to extract title and URL"""
         line = line.strip()
@@ -258,7 +281,7 @@ class OneTabManager:
                     self.tabs_data.append(
                         {"title": line.strip(), "url": None, "domain": "Unknown"}
                     )
-
+            self.tabs_data = self.dedupe_entries(self.tabs_data)
             self.filtered_data = self.tabs_data.copy()
             self.refresh_display()
             self.status_label.config(text=f"Loaded {len(self.tabs_data)} tabs")
