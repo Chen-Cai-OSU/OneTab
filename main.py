@@ -2,7 +2,7 @@
 """
 OneTab Manager - A tool to search, filter, and batch delete OneTab saved tabs
 """
-
+from urllib.parse import urlparse, urlunparse
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import re
@@ -209,7 +209,7 @@ class OneTabManager:
 
         counts = Counter(domains)
         most = counts.most_common(top_n)
-        
+
         # sum up just the top_n counts
         top_total = sum(cnt for _, cnt in most)
         top_pct = top_total / total * 100
@@ -267,6 +267,14 @@ class OneTabManager:
         # 4) fallback: treat as a section header or unlabeled entry
         return {"title": line, "url": None}
 
+    def _remove_fragment(self, url: str) -> str:
+        """
+        Strip off any “#…” fragment from the given URL.
+        """
+        parsed = urlparse(url)
+        # rebuild the URL with an empty fragment
+        return urlunparse(parsed._replace(fragment=""))
+
     def dedupe_entries(self, entries):
         """
         Remove any entries with duplicate URLs, keeping only the most
@@ -279,11 +287,13 @@ class OneTabManager:
         # iterate backwards so that the *last* (i.e. most recent) wins
         for entry in reversed(entries):
             url = entry.get('url')
-            if url and url in seen_urls:
+            # remove fragment identifiers
+            cleaned_url = self._remove_fragment(url) if url else None
+            if url and cleaned_url in seen_urls:
                 duplicates += 1
                 continue
             if url:
-                seen_urls.add(url)
+                seen_urls.add(cleaned_url)
             deduped_rev.append(entry)
 
         deduped = list(reversed(deduped_rev))
@@ -420,11 +430,9 @@ class OneTabManager:
         else:
             self.filtered_data = []
             for tab in self.tabs_data:
-                if (
-                    search_text in tab["title"].lower()
-                    or search_text in tab["url"].lower()
-                    or search_text in tab["domain"].lower()
-                ):
+                title = (tab.get("title") or "").lower()
+                url   = (tab.get("url")   or "").lower()
+                if search_text in title or search_text in url:
                     self.filtered_data.append(tab)
 
         self.refresh_display()
