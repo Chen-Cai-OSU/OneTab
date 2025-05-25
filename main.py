@@ -9,7 +9,7 @@ import re
 from urllib.parse import unquote, urlparse, parse_qs
 import json
 import os
-
+from collections import Counter
 
 class OneTabManager:
     def __init__(self, root):
@@ -161,6 +161,16 @@ class OneTabManager:
         )
         shortcuts_label.pack(side=tk.RIGHT, padx=10)
 
+        # after you create & layout everything, before root.mainloop()
+        self.root.update()  # make sure window exists
+        self.root.lift()    # lift it above all other windows
+        # temporarily make it the top‐most window
+        self.root.attributes('-topmost', True)
+        # then turn topmost off so the user can switch away
+        self.root.after_idle(self.root.attributes, '-topmost', False)
+        # finally, give it keyboard focus
+        self.root.focus_force()
+
     def sort_by(self, col, reverse=False):
         """
         Sort self.tabs_data by given column (e.g. 'domain', 'title', 'url'),
@@ -184,6 +194,39 @@ class OneTabManager:
         # next time we click, flip the sort order
         # store the new reverse flag on the heading
         self.tree.heading(col, command=lambda: self.sort_by(col, not reverse))
+
+    def print_domain_stats(self, top_n=20):
+        """
+        Count domains in self.tabs_data, then print the top `top_n`
+        along with their absolute counts and percentage of the total.
+        """
+        # collect only non-empty domains
+        domains = [e.get("domain") for e in self.tabs_data if e.get("domain")]
+        total = len(domains)
+        if total == 0:
+            print("No domains to analyze.")
+            return
+
+        counts = Counter(domains)
+        most = counts.most_common(top_n)
+        
+        # sum up just the top_n counts
+        top_total = sum(cnt for _, cnt in most)
+        top_pct = top_total / total * 100
+
+        # header
+        print(f"Total entries with domains: {total}\n")
+        print(f"Top {len(most)} domains by frequency:")
+        for rank, (domain, cnt) in enumerate(most, start=1):
+            pct = cnt / total * 100
+            print(f"{rank:2}. {domain:<30} {cnt:5d} entries   ({pct:5.2f}%)")
+
+        # aggregated summary
+        print("\n" + "-" * 60)
+        print(
+            f"Combined count for top {len(most)} domains: "
+            f"{top_total} entries ({top_pct:.2f}% of total)"
+        )
 
     def parse_onetab_line(self, line):
         """Parse a OneTab export line to extract title and URL"""
@@ -315,6 +358,7 @@ class OneTabManager:
                         {"title": line.strip(), "url": None, "domain": "Unknown"}
                     )
             self.tabs_data = self.dedupe_entries(self.tabs_data)
+            self.print_domain_stats(top_n=20)
             self.filtered_data = self.tabs_data.copy()
             self.refresh_display()
             self.status_label.config(text=f"Loaded {len(self.tabs_data)} tabs")
