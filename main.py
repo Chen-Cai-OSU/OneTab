@@ -4,6 +4,10 @@ OneTab Manager - A tool to search, filter, and batch delete OneTab saved tabs
 """
 from urllib.parse import urlparse, urlunparse
 import tkinter as tk
+import re
+import requests
+import xml.etree.ElementTree as ET
+import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import re
 from urllib.parse import unquote, urlparse, parse_qs
@@ -28,6 +32,26 @@ class OneTabManager:
         self.filtered_data = []
 
         self.setup_ui()
+
+    def fetch_arxiv_title(self, arxiv_id: str) -> str | None:
+        """Call arXiv’s API and return the paper’s title (or None on failure)."""
+        ARXIV_API = "http://export.arxiv.org/api/query?id_list={id}"
+        url = ARXIV_API.format(id=arxiv_id)
+        try:
+            resp = requests.get(url, timeout=5)
+            resp.raise_for_status()
+            root = ET.fromstring(resp.text)
+            # arXiv’s Atom feed uses the Atom namespace
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            entry = root.find("atom:entry", ns)
+            if entry is not None:
+                title_elem = entry.find("atom:title", ns)
+                if title_elem is not None and title_elem.text:
+                    # Collapse any internal whitespace/newlines
+                    return " ".join(title_elem.text.split())
+        except Exception:
+            pass
+        return None
 
     def setup_ui(self):
         # Create main frame
@@ -276,6 +300,22 @@ class OneTabManager:
         if not line:
             return None
 
+        # 0) plain URL case. Commented out temporarily for faster development.
+        # if "arxiv.org/" in line:
+        #     url = line
+        #     title = line
+
+        #     # is it an arXiv PDF URL?
+        #     m = re.search(r"arxiv\.org/(?:pdf|abs)/([0-9\.v]+)", url)
+        #     if m:
+        #         arxiv_id = m.group(1)
+        #         real_title = self.fetch_arxiv_title(arxiv_id)
+        #         if real_title:
+        #             print(f"Fetched arXiv title for {arxiv_id!r}: {real_title!r}")
+        #             title = real_title
+
+        #     return {"title": title, "url": url}
+
         # 1) chrome-extension://...#ttl=…&uri=… (OneTab export)
         if line.startswith("chrome-extension://"):
             try:
@@ -306,7 +346,7 @@ class OneTabManager:
         if re.match(r"^(https?|file)://", line):
             return {"title": line, "url": line}
 
-        # 4) fallback: treat as a section header or unlabeled entry
+        # 5) fallback: treat as a section header or unlabeled entry
         return {"title": line, "url": None}
 
     def _remove_fragment(self, url: str) -> str:
