@@ -237,7 +237,7 @@ class OneTabManager:
         # store the new reverse flag on the heading
         self.tree.heading(col, command=lambda: self.sort_by(col, not reverse))
 
-    def print_domain_stats(self, top_n=20):
+    def print_domain_stats(self, top_n=30):
         """
         Count domains in self.tabs_data, then print the top `top_n`
         along with their absolute counts and percentage of the total.
@@ -318,7 +318,21 @@ class OneTabManager:
         # # rebuild the URL with an empty fragment
         # return urlunparse(parsed._replace(fragment=""))
 
-    def dedupe_entries(self, entries):
+    def dedupe_tabs(self, tabs):
+        """Return a new list of tabs, keeping only the first occurrence of each title."""
+        seen = set()
+        unique_tabs = []
+        for tab in tabs:
+            title = tab.get("title")
+            # Skip if title is missing or already seen
+            if not title or title in seen:
+                continue
+            seen.add(title)
+            unique_tabs.append(tab)
+        print(f"Removed {len(tabs) - len(unique_tabs)} duplicate tab(s).")
+        return unique_tabs
+
+    def dedupe_urls(self, entries):
         """
         Remove any entries with duplicate URLs, keeping only the most
         recent occurrence, and print how many were dropped.
@@ -340,7 +354,7 @@ class OneTabManager:
             deduped_rev.append(entry)
 
         deduped = list(reversed(deduped_rev))
-        print(f"Removed {duplicates} duplicate entr{'y' if duplicates==1 else 'ies'}.")
+        print(f"Removed {duplicates} duplicate url(s).")
         return deduped
 
     def _parse_onetab_line(self, line):
@@ -413,8 +427,9 @@ class OneTabManager:
                     self.tabs_data.append(
                         {"title": line.strip(), "url": None, "domain": "Unknown"}
                     )
-            self.tabs_data = self.dedupe_entries(self.tabs_data)
-            self.print_domain_stats(top_n=20)
+            self.tabs_data = self.dedupe_urls(self.tabs_data)
+            self.tabs_data = self.dedupe_tabs(self.tabs_data)
+            self.print_domain_stats(top_n=30)
             self.filtered_data = self.tabs_data.copy()
             self.refresh_display()
             self.status_label.config(text=f"Loaded {len(self.tabs_data)} tabs")
