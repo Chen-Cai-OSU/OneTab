@@ -5,6 +5,7 @@ OneTab Manager - A tool to search, filter, and batch delete OneTab saved tabs
 from urllib.parse import urlparse, urlunparse
 import tkinter as tk
 import re
+import tkinter.font as tkfont
 import requests
 import xml.etree.ElementTree as ET
 import tkinter as tk
@@ -149,6 +150,13 @@ class OneTabManager:
         v_scrollbar.grid(row=0, column=1, sticky="ns")
         h_scrollbar.grid(row=1, column=0, sticky="ew")
 
+        # font stuff
+        self.default_font = tkfont.nametofont("TkDefaultFont")
+        # also grab the menu font if you have menus
+        self.menu_font = tkfont.nametofont("TkMenuFont")
+        # current size (so we can increment)
+        self.current_size = self.default_font.cget("size")
+
         # Configure columns
         self.tree.column("#0", width=50, stretch=False)
         self.tree.column("title", width=400)
@@ -177,6 +185,14 @@ class OneTabManager:
         self.root.bind("<Delete>", lambda e: self.delete_selected())
         self.root.bind("<Control-f>", lambda e: self.search_entry.focus())
         self.root.bind("<Control-F>", lambda e: self.search_entry.focus())
+
+        # Font size shortcuts
+        self.root.bind_all("<Command-plus>", self.increase_font)
+        self.root.bind_all("<Command-KP_Add>", self.increase_font)
+        self.root.bind_all("<Command-equal>", self.increase_font)
+        self.root.bind_all("<Command-minus>", self.decrease_font)
+        self.root.bind_all("<Command-KP_Add>", self.increase_font)
+        self.root.bind_all("<Command-KP_Subtract>", self.decrease_font)
 
         # Info frame
         info_frame = ttk.Frame(main_frame)
@@ -293,6 +309,53 @@ class OneTabManager:
             f"Combined count for top {len(most)} domains: "
             f"{top_total} entries ({top_pct:.2f}% of total)"
         )
+
+    def increase_font(self, event=None):
+        # bump by 1 (or whatever step you like)
+        self.current_size += 1
+
+        # reconfigure the named fonts
+        self.default_font.configure(size=self.current_size)
+        self.menu_font.configure(size=self.current_size)
+
+        style = ttk.Style()
+        style.configure("Treeview", font=self.default_font)
+        style.configure("Treeview.Heading", font=self.default_font)
+        self.adjust_column_widths()
+
+    def decrease_font(self, event=None):
+        # don’t go below 1 point
+        self.current_size = max(1, self.current_size - 1)
+
+        # update the named fonts
+        self.default_font.configure(size=self.current_size)
+        self.menu_font.configure(size=self.current_size)
+
+        # if you styled your Treeview explicitly:
+        style = ttk.Style()
+        style.configure("Treeview",         font=self.default_font)
+        style.configure("Treeview.Heading", font=self.default_font)
+        self.adjust_column_widths()
+
+    def adjust_column_widths(self):
+        """Measure every cell + header in each column and resize to fit."""
+        font = self.default_font
+        padding = 10  # a little slop on either side
+
+        for col in self.tree["columns"]:
+            # start with the header text width
+            header_text = self.tree.heading(col, option="text")
+            max_w = font.measure(header_text)
+
+            # scan every row’s value in this column
+            for item in self.tree.get_children():
+                cell_text = self.tree.set(item, col)
+                w = font.measure(cell_text)
+                if w > max_w:
+                    max_w = w
+
+            # finally, reconfigure the column
+            self.tree.column(col, width=max_w + padding)
 
     def parse_onetab_line(self, line):
         """Parse a OneTab export line to extract title and URL"""
