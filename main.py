@@ -12,6 +12,7 @@ import os
 from collections import Counter
 from urllib.parse import quote
 from tkinter import filedialog
+import subprocess
 
 ONE_TAB_PREFIX = "chrome-extension://lnepcdnpflggegdhpnnffojfdpfoambo" "/suspended.html"
 
@@ -144,6 +145,7 @@ class OneTabManager:
 
         # Bind selection change event
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.update_info())
+        self.tree.bind("<Double-1>", self.on_double_click)
 
         # Add keyboard shortcuts
         self.root.bind("<Control-a>", lambda e: self.select_all_visible())
@@ -178,6 +180,38 @@ class OneTabManager:
         self.root.after_idle(self.root.attributes, '-topmost', False)
         # finally, give it keyboard focus
         self.root.focus_force()
+
+    def on_double_click(self, event):
+        """Open the clicked tab in Chrome and remove it from the list."""
+        # figure out which row was clicked
+        item_id = self.tree.identify_row(event.y)
+        if not item_id:
+            return
+
+        # columns = (title, url, domain), so value[1] is the URL
+        title, url, domain = self.tree.item(item_id, "values")
+        if not url:
+            messagebox.showinfo("No URL", "There’s no URL in this row.")
+            return
+
+        # open in Chrome (macOS)
+        try:
+            subprocess.Popen(["open", "-a", "Google Chrome", url])
+        except Exception:
+            # fallback to default browser
+            import webbrowser
+            webbrowser.open_new_tab(url)
+
+        # remove from in-memory lists
+        # find its index in the filtered list
+        idx = int(self.tree.item(item_id, "text")) - 1
+        tab = self.filtered_data.pop(idx)
+        # also remove from the master list
+        if tab in self.tabs_data:
+            self.tabs_data.remove(tab)
+
+        # refresh the display (will re-populate the tree and update counts)
+        self.refresh_display()
 
     def sort_by(self, col, reverse=False):
         """
