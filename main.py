@@ -10,10 +10,16 @@ from urllib.parse import unquote, urlparse, parse_qs
 import json
 import os
 from collections import Counter
+from urllib.parse import quote
+from tkinter import filedialog
+
+ONE_TAB_PREFIX = "chrome-extension://lnepcdnpflggegdhpnnffojfdpfoambo" "/suspended.html"
+
 
 class OneTabManager:
     def __init__(self, root):
         self.root = root
+        self.current_filepath = None
         self.root.title("OneTab Manager")
         self.root.geometry("1200x700")
 
@@ -46,6 +52,8 @@ class OneTabManager:
         ttk.Button(file_frame, text="Export as JSON", command=self.export_json).pack(
             side=tk.LEFT, padx=5
         )
+        btn = ttk.Button(file_frame, text="Save Current", command=self.save_current)
+        btn.pack(side="left", padx=4, pady=4)
 
         # Search and filter frame
         search_frame = ttk.LabelFrame(main_frame, text="Search & Filter", padding="5")
@@ -271,9 +279,10 @@ class OneTabManager:
         """
         Strip off any “#…” fragment from the given URL.
         """
-        parsed = urlparse(url)
-        # rebuild the URL with an empty fragment
-        return urlunparse(parsed._replace(fragment=""))
+        return url
+        # parsed = urlparse(url)
+        # # rebuild the URL with an empty fragment
+        # return urlunparse(parsed._replace(fragment=""))
 
     def dedupe_entries(self, entries):
         """
@@ -350,6 +359,9 @@ class OneTabManager:
             filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
         )
 
+        # remember it for future saves
+        self.current_filepath = filename
+
         if not filename:
             return
 
@@ -377,6 +389,61 @@ class OneTabManager:
             messagebox.showerror("Error", f"Failed to load file: {str(e)}")
 
         print(f"Read {len(lines)} lines, parsed {len(self.tabs_data)} tabs")
+
+    def save_current(self):
+        """
+        Write out self.tabs_data in OneTab format,
+        auto‐naming the file with an increasing _vN suffix.
+        """
+        if self.current_filepath:
+            dirpath, fn = os.path.split(self.current_filepath)
+            name, ext = os.path.splitext(fn)
+
+            # if name ends in "_vN", strip it off to find the base
+            m = re.match(r"^(.*)_v(\d+)$", name)
+            base = m.group(1) if m else name
+
+            # scan dir for existing versions of base
+            pat = re.compile(rf"^{re.escape(base)}_v(\d+){re.escape(ext)}$")
+            maxv = 0
+            for f in os.listdir(dirpath):
+                mm = pat.match(f)
+                if mm:
+                    v = int(mm.group(1))
+                    if v > maxv:
+                        maxv = v
+
+            newv = maxv + 1
+            save_name = f"{base}_v{newv}{ext}"
+            path = os.path.join(dirpath, save_name)
+        else:
+            # fallback if no file was loaded
+            path = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[("Text files","*.txt"),("All files","*.*")],
+            )
+            if not path:
+                return
+
+        # now build the OneTab lines
+        lines = []
+        for entry in self.tabs_data:
+            url   = entry.get("url")
+            title = entry.get("title","")
+            # if url:
+            #     frag = f"ttl={quote(title)}&uri={quote(url)}"
+            #     lines.append(f"{ONE_TAB_PREFIX}#{frag}")
+            # else:
+            # breakpoint()
+            lines.append(f"{url} | {title}")
+
+        # write it out
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+        # remember this file for next time
+        self.current_filepath = path
+        print(f"Saved {len(lines)} tabs to {path!r}")
 
     def refresh_display(self):
         """Refresh the treeview display"""
