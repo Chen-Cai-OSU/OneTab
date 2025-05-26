@@ -185,6 +185,12 @@ class OneTabManager:
         self.root.bind("<Delete>", lambda e: self.delete_selected())
         self.root.bind("<Control-f>", lambda e: self.search_entry.focus())
         self.root.bind("<Control-F>", lambda e: self.search_entry.focus())
+        
+        # delete shortcuts
+        self.root.bind_all("<Delete>", self.delete_selected)
+        self.root.bind_all("<Command-Delete>", self.delete_selected)
+        self.root.bind_all("<Command-BackSpace>", self.delete_selected)
+        self.root.bind_all("<Control-d>", self.delete_selected)
 
         # Font size shortcuts
         self.root.bind_all("<Command-plus>", self.increase_font)
@@ -213,11 +219,11 @@ class OneTabManager:
 
         # after you create & layout everything, before root.mainloop()
         self.root.update()  # make sure window exists
-        self.root.lift()    # lift it above all other windows
+        self.root.lift()  # lift it above all other windows
         # temporarily make it the top‐most window
-        self.root.attributes('-topmost', True)
+        self.root.attributes("-topmost", True)
         # then turn topmost off so the user can switch away
-        self.root.after_idle(self.root.attributes, '-topmost', False)
+        self.root.after_idle(self.root.attributes, "-topmost", False)
         # finally, give it keyboard focus
         self.root.focus_force()
 
@@ -240,6 +246,7 @@ class OneTabManager:
         except Exception:
             # fallback to default browser
             import webbrowser
+
             webbrowser.open_new_tab(url)
 
         # remove from in-memory lists
@@ -268,9 +275,9 @@ class OneTabManager:
         # re-insert rows in new order
         for entry in self.tabs_data:
             self.tree.insert(
-                "", 
-                "end", 
-                values=(entry.get("title"), entry.get("url"), entry.get("domain"))
+                "",
+                "end",
+                values=(entry.get("title"), entry.get("url"), entry.get("domain")),
             )
 
         # next time we click, flip the sort order
@@ -333,7 +340,7 @@ class OneTabManager:
 
         # if you styled your Treeview explicitly:
         style = ttk.Style()
-        style.configure("Treeview",         font=self.default_font)
+        style.configure("Treeview", font=self.default_font)
         style.configure("Treeview.Heading", font=self.default_font)
         self.adjust_column_widths()
 
@@ -446,7 +453,7 @@ class OneTabManager:
 
         # iterate backwards so that the *last* (i.e. most recent) wins
         for entry in reversed(entries):
-            url = entry.get('url')
+            url = entry.get("url")
             # remove fragment identifiers
             cleaned_url = self._remove_fragment(url) if url else None
             if url and cleaned_url in seen_urls:
@@ -572,7 +579,7 @@ class OneTabManager:
             # fallback if no file was loaded
             path = filedialog.asksaveasfilename(
                 defaultextension=".txt",
-                filetypes=[("Text files","*.txt"),("All files","*.*")],
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
             )
             if not path:
                 return
@@ -580,8 +587,8 @@ class OneTabManager:
         # now build the OneTab lines
         lines = []
         for entry in self.tabs_data:
-            url   = entry.get("url")
-            title = entry.get("title","")
+            url = entry.get("url")
+            title = entry.get("title", "")
             # if url:
             #     frag = f"ttl={quote(title)}&uri={quote(url)}"
             #     lines.append(f"{ONE_TAB_PREFIX}#{frag}")
@@ -650,7 +657,7 @@ class OneTabManager:
             self.filtered_data = []
             for tab in self.tabs_data:
                 title = (tab.get("title") or "").lower()
-                url   = (tab.get("url")   or "").lower()
+                url = (tab.get("url") or "").lower()
                 if search_text in title or search_text in url:
                     self.filtered_data.append(tab)
 
@@ -673,7 +680,23 @@ class OneTabManager:
         self.tree.selection_remove(self.tree.get_children())
         self.update_info()
 
-    def delete_selected(self):
+    def delete_selected(self, event=None):
+        """Remove the selected rows from both the GUI and your data lists."""
+        sel = self.tree.selection()
+        if not sel:
+            return
+
+        # delete in reverse order so indices don’t shift under you
+        for item_id in reversed(sel):
+            idx = self.tree.index(item_id)  # <-- get the 0-based row number
+            tab = self.filtered_data.pop(idx)  # remove from filtered view
+            if tab in self.tabs_data:  # also remove from master list
+                self.tabs_data.remove(tab)
+
+        # re-draw the tree (and re-number any row-labels if you had them)
+        self.refresh_display()
+
+    def _delete_selected(self):
         """Delete selected tabs"""
         selected_items = self.tree.selection()
         if not selected_items:
